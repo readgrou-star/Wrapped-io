@@ -65,8 +65,16 @@ export interface LandingBlock {
   style?: BlockStyle;
 }
 
+export interface FormStyle {
+    shadow: 'none' | 'sm' | 'md' | 'xl' | '2xl';
+    borderRadius: 'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
+    borderColor: string;
+    backgroundColor: string;
+}
+
 export interface LandingConfig {
   blocks: LandingBlock[];
+  formStyle?: FormStyle;
 }
 
 export interface Form {

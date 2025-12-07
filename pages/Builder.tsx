@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronUp, ChevronDown, Save, ArrowRight, Trash2, PlusCircle, Plus, X, Layout, Type, List, User, AlignLeft, AlignCenter, AlignRight, Check, ChevronDown as ChevronDownIcon, Palette, Image as ImageIcon, Box, Move } from 'lucide-react';
-import { Form, FormField, FieldType, LandingBlock, BlockType, BlockStyle, StoryConfig, StoryElement } from '../types';
+import { ChevronLeft, ChevronUp, ChevronDown, Save, ArrowRight, Trash2, PlusCircle, Plus, X, Layout, Type, List, User, AlignLeft, AlignCenter, AlignRight, Check, ChevronDown as ChevronDownIcon, Palette, Image as ImageIcon, Box, Move, Monitor, Smartphone, Wand2, Settings, MousePointer2 } from 'lucide-react';
+import { Form, FormField, FieldType, LandingBlock, BlockType, BlockStyle, StoryConfig, StoryElement, FormStyle } from '../types';
 import { DEFAULT_STORY_CONFIG, DEFAULT_LANDING_CONFIG } from '../constants';
 import { db } from '../services/db';
 import { useAuth } from '../contexts/AuthContext';
@@ -40,7 +40,7 @@ const InlineText = ({
         <Tag
             contentEditable
             suppressContentEditableWarning
-            className={`outline-none border border-transparent hover:border-blue-200 hover:bg-blue-50/10 focus:border-blue-500 rounded px-1 transition-all cursor-text ${className}`}
+            className={`outline-none border border-transparent hover:border-blue-300 focus:border-blue-500 rounded px-1 transition-all cursor-text ${className}`}
             onBlur={(e: React.FocusEvent<HTMLElement>) => onChange(e.currentTarget.textContent || '')}
         >
             {value}
@@ -55,8 +55,15 @@ export const Builder = () => {
     const [form, setForm] = useState<Form>(INITIAL_FORM);
     
     // Landing Page State
+    const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop');
     const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
-    const [draggedBlockIndex, setDraggedBlockIndex] = useState<number | null>(null);
+    const [selectedFormCard, setSelectedFormCard] = useState(false);
+    
+    // Drag and Drop State
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+    const [isDraggingBlock, setIsDraggingBlock] = useState(false);
+    const dragItemRef = useRef<number | null>(null); // Index of item being dragged
+    const dragNodeRef = useRef<EventTarget | null>(null);
 
     // Story Designer State
     const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
@@ -197,23 +204,26 @@ export const Builder = () => {
 
         setForm(prev => {
             const blocks = [...(prev.landingConfig?.blocks || [])];
-            if (index !== undefined) {
+            // If dropping, insert at index. If clicking, append.
+            if (index !== undefined && index !== null) {
                 blocks.splice(index, 0, newBlock);
             } else {
                 blocks.push(newBlock);
             }
             return {
                 ...prev,
-                landingConfig: { blocks }
+                landingConfig: { ...prev.landingConfig, blocks }
             };
         });
         setSelectedBlockId(newBlock.id);
+        setSelectedFormCard(false);
     };
 
     const updateBlock = (id: string, updates: Partial<LandingBlock>) => {
         setForm(prev => ({
             ...prev,
             landingConfig: {
+                ...prev.landingConfig,
                 blocks: prev.landingConfig.blocks.map(b => b.id === id ? { ...b, ...updates } : b)
             }
         }));
@@ -223,6 +233,7 @@ export const Builder = () => {
         setForm(prev => ({
             ...prev,
             landingConfig: {
+                ...prev.landingConfig,
                 blocks: prev.landingConfig.blocks.map(b => b.id === id ? { 
                     ...b, 
                     style: { ...b.style, ...styleUpdates } 
@@ -231,52 +242,112 @@ export const Builder = () => {
         }));
     };
 
+    const updateFormStyle = (styleUpdates: Partial<FormStyle>) => {
+         setForm(prev => ({
+            ...prev,
+            landingConfig: {
+                ...prev.landingConfig,
+                formStyle: { ...prev.landingConfig.formStyle, ...styleUpdates } as FormStyle
+            }
+        }));
+    };
+
     const removeBlock = (id: string) => {
         setForm(prev => ({
             ...prev,
             landingConfig: {
+                ...prev.landingConfig,
                 blocks: prev.landingConfig.blocks.filter(b => b.id !== id)
             }
         }));
         if (selectedBlockId === id) setSelectedBlockId(null);
     };
 
-    // DnD Handlers
-    const handleDragStart = (e: React.DragEvent, type: BlockType) => {
-        e.dataTransfer.setData('blockType', type);
+    const handleAutoLayout = () => {
+        // Automatically optimize padding and alignment for mobile
+        setForm(prev => ({
+            ...prev,
+            landingConfig: {
+                ...prev.landingConfig,
+                blocks: prev.landingConfig.blocks.map(b => ({
+                    ...b,
+                    style: {
+                        ...b.style,
+                        padding: 'sm',
+                        textAlign: 'center'
+                    }
+                }))
+            }
+        }));
+        alert("Auto Layout Applied for Mobile!");
     };
 
-    const handleCanvasDrop = (e: React.DragEvent) => {
+    // --- DRAG AND DROP HANDLERS (CANVA STYLE) ---
+
+    // 1. Sidebar Item Start
+    const handleSidebarDragStart = (e: React.DragEvent, type: BlockType) => {
+        e.dataTransfer.setData('blockType', type);
+        e.dataTransfer.effectAllowed = 'copy';
+    };
+
+    // 2. Existing Block Start
+    const handleBlockDragStart = (e: React.DragEvent, index: number) => {
+        dragItemRef.current = index;
+        dragNodeRef.current = e.target;
+        e.dataTransfer.effectAllowed = 'move';
+        setIsDraggingBlock(true);
+        // dataTransfer set to allow drag
+        e.dataTransfer.setData('index', index.toString());
+        // Transparent drag image
+        const img = new Image();
+        img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        e.dataTransfer.setDragImage(img, 0, 0);
+    };
+
+    const handleDragEnter = (e: React.DragEvent, index: number) => {
         e.preventDefault();
-        const type = e.dataTransfer.getData('blockType') as BlockType;
-        if (type) {
-            addBlock(type);
+        if (dragItemRef.current !== index) {
+            setDragOverIndex(index);
         }
     };
 
-    const handleBlockDragStart = (e: React.DragEvent, index: number) => {
-        setDraggedBlockIndex(index);
-        e.dataTransfer.effectAllowed = 'move';
+    const handleCanvasDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
     };
 
-    const handleBlockDrop = (e: React.DragEvent, dropIndex: number) => {
+    const handleDrop = (e: React.DragEvent, dropIndex: number) => {
         e.preventDefault();
-        e.stopPropagation();
-        
-        const type = e.dataTransfer.getData('blockType') as BlockType;
-        if (type) {
-            addBlock(type, dropIndex);
+        setDragOverIndex(null);
+        setIsDraggingBlock(false);
+
+        const blockType = e.dataTransfer.getData('blockType') as BlockType;
+
+        // Case A: Dropping a new block from Sidebar
+        if (blockType) {
+            // If dropping on the container (dropIndex -1) or specific index
+            const targetIndex = dropIndex === -1 ? form.landingConfig.blocks.length : dropIndex;
+            addBlock(blockType, targetIndex);
             return;
         }
 
-        if (draggedBlockIndex !== null && draggedBlockIndex !== dropIndex) {
-            const blocks = [...form.landingConfig.blocks];
-            const [movedBlock] = blocks.splice(draggedBlockIndex, 1);
-            blocks.splice(dropIndex, 0, movedBlock);
-            setForm(prev => ({ ...prev, landingConfig: { blocks } }));
+        // Case B: Reordering existing block
+        const dragIndexStr = e.dataTransfer.getData('index');
+        if (dragIndexStr) {
+            const dragIndex = parseInt(dragIndexStr);
+            if (dragIndex === dropIndex) return;
+
+            const newBlocks = [...form.landingConfig.blocks];
+            const [movedBlock] = newBlocks.splice(dragIndex, 1);
+            newBlocks.splice(dropIndex, 0, movedBlock);
+
+            setForm(prev => ({
+                ...prev,
+                landingConfig: { ...prev.landingConfig, blocks: newBlocks }
+            }));
         }
-        setDraggedBlockIndex(null);
+        dragItemRef.current = null;
     };
+
 
     const handleSave = async () => {
         if (!user) return;
@@ -297,6 +368,7 @@ export const Builder = () => {
     // --- RENDERERS ---
 
     const renderBuildStep = () => (
+        // ... (Keep existing form builder code exactly as is)
         <div className="flex h-[calc(100vh-60px)] bg-slate-50">
             {/* Sidebar Controls */}
             <div className="w-1/3 min-w-[320px] bg-white border-r border-slate-200 overflow-y-auto p-6 scroll-smooth">
@@ -462,6 +534,7 @@ export const Builder = () => {
     );
 
     const renderDesignStep = () => {
+         // ... (Keep existing story designer code exactly as is)
         const selectedElement = form.storyConfig.elements.find(el => el.id === selectedElementId);
 
         return (
@@ -654,177 +727,352 @@ export const Builder = () => {
 
     const renderLandingStep = () => {
         const blocks = form.landingConfig?.blocks || [];
+        const formStyle = form.landingConfig.formStyle || { shadow: 'xl', borderRadius: 'xl', borderColor: '#e2e8f0', backgroundColor: '#ffffff' };
 
         return (
             <div className="flex h-[calc(100vh-60px)] bg-slate-50">
                 {/* 1. Sidebar - Draggable Widgets */}
                 <div className="w-[300px] bg-white border-r border-slate-200 overflow-y-auto p-6 scroll-smooth z-10 flex-shrink-0">
-                    <h3 className="font-bold text-slate-900 mb-6 text-lg stack-sans-headline">Drag Elements</h3>
-                    <p className="text-xs text-slate-500 mb-4 google-sans-flex">Drag these blocks to the right to build your page.</p>
                     
-                    <div className="grid grid-cols-2 gap-3">
-                        {['hero', 'text', 'features', 'speakers'].map((type) => (
-                            <div 
-                                key={type}
-                                draggable
-                                onDragStart={(e) => handleDragStart(e, type as BlockType)}
-                                className="p-4 border border-slate-200 hover:border-slate-900 hover:bg-slate-50 rounded-xl flex flex-col items-center gap-2 text-xs font-bold transition cursor-grab active:cursor-grabbing bg-white shadow-sm"
-                            >
-                                {type === 'hero' && <Layout className="w-5 h-5 text-blue-600" />}
-                                {type === 'text' && <Type className="w-5 h-5 text-purple-600" />}
-                                {type === 'features' && <List className="w-5 h-5 text-green-600" />}
-                                {type === 'speakers' && <User className="w-5 h-5 text-orange-600" />}
-                                <span className="capitalize">{type}</span>
+                    {selectedFormCard ? (
+                         <div className="animate-in slide-in-from-left-4 fade-in duration-200">
+                            <div className="flex items-center gap-2 mb-6">
+                                <button onClick={() => setSelectedFormCard(false)} className="text-slate-400 hover:text-slate-600">
+                                    <ChevronLeft className="w-4 h-4" />
+                                </button>
+                                <h3 className="font-bold text-slate-900 text-lg stack-sans-headline">Form Card Style</h3>
                             </div>
-                        ))}
-                    </div>
+                            
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Shadow</label>
+                                    <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                                        {['none', 'sm', 'md', 'xl', '2xl'].map(s => (
+                                            <button 
+                                                key={s}
+                                                onClick={() => updateFormStyle({ shadow: s as any })}
+                                                className={`flex-1 py-1 rounded text-[10px] font-bold uppercase ${formStyle.shadow === s ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}
+                                            >
+                                                {s}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Roundness</label>
+                                    <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                                        {['sm', 'md', 'lg', 'xl', '2xl', '3xl'].map(r => (
+                                            <button 
+                                                key={r}
+                                                onClick={() => updateFormStyle({ borderRadius: r as any })}
+                                                className={`flex-1 py-1 rounded text-[10px] font-bold uppercase ${formStyle.borderRadius === r ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}
+                                            >
+                                                {r}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Border Color</label>
+                                    <div className="flex items-center gap-3">
+                                        <input 
+                                            type="color" 
+                                            value={formStyle.borderColor}
+                                            onChange={(e) => updateFormStyle({ borderColor: e.target.value })}
+                                            className="w-10 h-10 rounded border border-slate-200 cursor-pointer"
+                                        />
+                                        <span className="text-xs font-mono text-slate-500">{formStyle.borderColor}</span>
+                                    </div>
+                                </div>
+                            </div>
+                         </div>
+                    ) : (
+                        <>
+                            <h3 className="font-bold text-slate-900 mb-6 text-lg stack-sans-headline">Drag Components</h3>
+                            <p className="text-xs text-slate-500 mb-6 google-sans-flex">Drag these blocks to the right to build your page. Sort and reorder instantly.</p>
+                            
+                            <div className="space-y-3">
+                                {[
+                                    {type: 'hero', label: 'Hero Header', icon: Layout, color: 'text-blue-600', bg: 'bg-blue-50'},
+                                    {type: 'text', label: 'Text Content', icon: Type, color: 'text-purple-600', bg: 'bg-purple-50'},
+                                    {type: 'features', label: 'Feature Grid', icon: List, color: 'text-green-600', bg: 'bg-green-50'},
+                                    {type: 'speakers', label: 'Speakers / Team', icon: User, color: 'text-orange-600', bg: 'bg-orange-50'}
+                                ].map((item) => (
+                                    <div 
+                                        key={item.type}
+                                        draggable
+                                        onDragStart={(e) => handleSidebarDragStart(e, item.type as BlockType)}
+                                        className="p-3 border border-slate-200 hover:border-slate-400 rounded-xl flex items-center gap-3 cursor-grab active:cursor-grabbing bg-white shadow-sm transition-all hover:translate-x-1"
+                                    >
+                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${item.bg}`}>
+                                            <item.icon className={`w-5 h-5 ${item.color}`} />
+                                        </div>
+                                        <div>
+                                            <div className="text-xs font-bold text-slate-900">{item.label}</div>
+                                            <div className="text-[10px] text-slate-400">Drag to canvas</div>
+                                        </div>
+                                        <div className="ml-auto text-slate-300">
+                                            <MousePointer2 className="w-4 h-4" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
 
-                    <div className="mt-8 pt-8 border-t border-slate-100">
-                        <h4 className="font-bold text-slate-900 mb-2 text-sm">Tips</h4>
-                        <ul className="text-xs text-slate-500 list-disc pl-4 space-y-1">
-                            <li>Click text on the preview to edit</li>
-                            <li>Click a block to customize style</li>
-                            <li>Drag blocks to reorder</li>
-                        </ul>
-                    </div>
+                            <div className="mt-8 pt-8 border-t border-slate-100">
+                                <h4 className="font-bold text-slate-900 mb-2 text-sm">Editor Tips</h4>
+                                <ul className="text-xs text-slate-500 space-y-2">
+                                    <li className="flex gap-2">
+                                        <div className="w-1 h-1 bg-slate-400 rounded-full mt-1.5"></div>
+                                        Drag sections up/down to reorder
+                                    </li>
+                                    <li className="flex gap-2">
+                                        <div className="w-1 h-1 bg-slate-400 rounded-full mt-1.5"></div>
+                                        Click text to edit directly
+                                    </li>
+                                    <li className="flex gap-2">
+                                        <div className="w-1 h-1 bg-slate-400 rounded-full mt-1.5"></div>
+                                        Select sections to change style
+                                    </li>
+                                </ul>
+                            </div>
+                        </>
+                    )}
                 </div>
 
-                {/* 2. Preview Area - 70/30 Split Seamless */}
-                <div className="flex-1 flex overflow-hidden bg-slate-50">
+                {/* 2. Preview Area - 70/30 Split Seamless (With Mobile Switcher) */}
+                <div className="flex-1 flex flex-col overflow-hidden bg-slate-100">
                     
-                    {/* 70% Content Area (Drop Zone) */}
-                    <div 
-                        className="flex-[7] overflow-y-auto no-scrollbar relative"
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={handleCanvasDrop}
-                    >
-                         {/* Fake Nav */}
-                        <div className="sticky top-0 z-20 px-8 py-6 flex items-center justify-between mix-blend-multiply pointer-events-none opacity-50">
-                            <div className="font-bold text-xl text-slate-900 stack-sans-headline flex items-center gap-2">
-                                <div className="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center text-sm">W</div>
-                                {form.title}
-                            </div>
+                    {/* Viewport Toolbar */}
+                    <div className="h-12 bg-white border-b border-slate-200 flex items-center justify-center gap-4">
+                        <div className="flex bg-slate-100 p-1 rounded-lg">
+                            <button 
+                                onClick={() => setViewMode('desktop')} 
+                                className={`p-2 rounded-md transition ${viewMode === 'desktop' ? 'bg-white shadow text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
+                                title="Desktop View"
+                            >
+                                <Monitor className="w-4 h-4" />
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('mobile')} 
+                                className={`p-2 rounded-md transition ${viewMode === 'mobile' ? 'bg-white shadow text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
+                                title="Mobile View"
+                            >
+                                <Smartphone className="w-4 h-4" />
+                            </button>
                         </div>
+                        
+                        {viewMode === 'mobile' && (
+                            <button 
+                                onClick={handleAutoLayout}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 text-purple-600 border border-purple-100 rounded-lg text-xs font-bold hover:bg-purple-100 transition animate-in fade-in"
+                            >
+                                <Wand2 className="w-3.5 h-3.5" /> Auto Layout
+                            </button>
+                        )}
+                    </div>
 
-                        {blocks.length === 0 ? (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-300 pointer-events-none p-10">
-                                <PlusCircle className="w-16 h-16 mb-4 opacity-50" />
-                                <p className="text-lg font-bold">Drag blocks here</p>
-                            </div>
-                        ) : (
-                            <div className="min-h-full pb-20 pt-4">
-                                {blocks.map((block, idx) => (
-                                    <div 
-                                        key={block.id}
-                                        draggable
-                                        onDragStart={(e) => handleBlockDragStart(e, idx)}
-                                        onDragOver={(e) => e.preventDefault()}
-                                        onDrop={(e) => handleBlockDrop(e, idx)}
-                                        onClick={() => setSelectedBlockId(block.id)}
-                                        className={`
-                                            relative group transition-all duration-200 px-8 md:px-12
-                                            ${block.style?.padding === 'sm' ? 'py-8' : block.style?.padding === 'lg' ? 'py-24' : 'py-16'}
-                                            ${block.style?.backgroundColor === 'bg-white' ? 'bg-slate-50' : (block.style?.backgroundColor || 'bg-slate-50')}
-                                            ${block.style?.textColor || 'text-slate-900'}
-                                            ${block.style?.textAlign === 'center' ? 'text-center' : block.style?.textAlign === 'right' ? 'text-right' : 'text-left'}
-                                            ${selectedBlockId === block.id ? 'ring-2 ring-blue-500 ring-inset z-10' : 'hover:ring-1 hover:ring-blue-200 hover:ring-inset'}
-                                        `}
-                                    >
-                                        {/* Floating Toolbar (Selected) */}
-                                        {selectedBlockId === block.id && (
-                                            <div className="absolute top-4 right-4 z-50 flex items-center gap-1 bg-slate-900 text-white p-1.5 rounded-lg shadow-xl animate-in fade-in zoom-in-95 duration-200">
-                                                <div className="flex items-center border-r border-white/20 pr-1 mr-1 gap-1">
-                                                    <button onClick={(e) => {e.stopPropagation(); updateBlockStyle(block.id, {textAlign: 'left'})}} className={`p-1.5 rounded hover:bg-white/20 ${block.style?.textAlign === 'left' ? 'bg-white/20' : ''}`} title="Align Left"><AlignLeft className="w-3.5 h-3.5" /></button>
-                                                    <button onClick={(e) => {e.stopPropagation(); updateBlockStyle(block.id, {textAlign: 'center'})}} className={`p-1.5 rounded hover:bg-white/20 ${block.style?.textAlign === 'center' ? 'bg-white/20' : ''}`} title="Align Center"><AlignCenter className="w-3.5 h-3.5" /></button>
-                                                    <button onClick={(e) => {e.stopPropagation(); updateBlockStyle(block.id, {textAlign: 'right'})}} className={`p-1.5 rounded hover:bg-white/20 ${block.style?.textAlign === 'right' ? 'bg-white/20' : ''}`} title="Align Right"><AlignRight className="w-3.5 h-3.5" /></button>
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden p-8 flex justify-center bg-slate-100 relative">
+                        
+                        {/* Editor Canvas Container */}
+                        <div 
+                            className={`transition-all duration-300 bg-slate-50 shadow-sm relative flex flex-col md:flex-row overflow-hidden
+                                ${viewMode === 'mobile' ? 'w-[375px] h-[812px] border-[10px] border-slate-900 rounded-[3rem] shadow-2xl mt-4 ring-4 ring-slate-900/20' : 'w-full h-full rounded-none'}
+                            `}
+                        >
+                             {/* 70% Content Area (Canva-like Drop Zone) */}
+                            <div 
+                                className={`${viewMode === 'mobile' ? 'w-full h-full overflow-y-auto' : 'flex-[7] h-full overflow-y-auto'} no-scrollbar relative`}
+                                onDragOver={handleCanvasDragOver}
+                                onDrop={(e) => handleDrop(e, -1)}
+                            >
+                                {/* Fake Nav */}
+                                <div className="sticky top-0 z-20 px-8 py-6 flex items-center justify-between mix-blend-multiply pointer-events-none opacity-50">
+                                    <div className="font-bold text-xl text-slate-900 stack-sans-headline flex items-center gap-2">
+                                        <div className="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center text-sm">W</div>
+                                        {form.title}
+                                    </div>
+                                </div>
+
+                                {blocks.length === 0 ? (
+                                    <div className="h-full flex flex-col items-center justify-center text-slate-300 pointer-events-none p-10 border-2 border-dashed border-slate-200 m-8 rounded-2xl">
+                                        <PlusCircle className="w-16 h-16 mb-4 opacity-50" />
+                                        <p className="text-lg font-bold">Drag blocks here</p>
+                                    </div>
+                                ) : (
+                                    <div className="min-h-full pb-20 pt-4 px-2">
+                                        {blocks.map((block, idx) => (
+                                            <React.Fragment key={block.id}>
+                                                
+                                                {/* Drop Indicator */}
+                                                {dragOverIndex === idx && (
+                                                    <div className="h-1 bg-blue-500 my-2 rounded-full mx-8 animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+                                                )}
+
+                                                <div 
+                                                    draggable
+                                                    onDragStart={(e) => handleBlockDragStart(e, idx)}
+                                                    onDragOver={(e) => handleDragEnter(e, idx)}
+                                                    onDrop={(e) => handleDrop(e, idx)}
+                                                    onClick={() => { setSelectedBlockId(block.id); setSelectedFormCard(false); }}
+                                                    className={`
+                                                        relative group transition-all duration-200 px-6 md:px-10 cursor-move
+                                                        rounded-xl border border-transparent
+                                                        ${block.style?.padding === 'sm' ? 'py-8' : block.style?.padding === 'lg' ? 'py-24' : 'py-16'}
+                                                        ${block.style?.backgroundColor === 'bg-white' ? 'bg-slate-50' : (block.style?.backgroundColor || 'bg-slate-50')}
+                                                        ${block.style?.textColor || 'text-slate-900'}
+                                                        ${block.style?.textAlign === 'center' ? 'text-center' : block.style?.textAlign === 'right' ? 'text-right' : 'text-left'}
+                                                        ${selectedBlockId === block.id ? 'ring-2 ring-blue-500 ring-offset-2 z-10 bg-white shadow-xl' : 'hover:bg-white/50 hover:border-slate-200 hover:shadow-sm'}
+                                                    `}
+                                                >
+                                                    {/* Floating Toolbar (Selected) */}
+                                                    {selectedBlockId === block.id && (
+                                                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 bg-slate-900 text-white p-1.5 rounded-full shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                                                            <div className="flex items-center border-r border-white/20 pr-1 mr-1 gap-1">
+                                                                <button onClick={(e) => {e.stopPropagation(); updateBlockStyle(block.id, {textAlign: 'left'})}} className={`p-2 rounded-full hover:bg-white/20 ${block.style?.textAlign === 'left' ? 'bg-white/20' : ''}`} title="Align Left"><AlignLeft className="w-3.5 h-3.5" /></button>
+                                                                <button onClick={(e) => {e.stopPropagation(); updateBlockStyle(block.id, {textAlign: 'center'})}} className={`p-2 rounded-full hover:bg-white/20 ${block.style?.textAlign === 'center' ? 'bg-white/20' : ''}`} title="Align Center"><AlignCenter className="w-3.5 h-3.5" /></button>
+                                                                <button onClick={(e) => {e.stopPropagation(); updateBlockStyle(block.id, {textAlign: 'right'})}} className={`p-2 rounded-full hover:bg-white/20 ${block.style?.textAlign === 'right' ? 'bg-white/20' : ''}`} title="Align Right"><AlignRight className="w-3.5 h-3.5" /></button>
+                                                            </div>
+                                                            <div className="flex items-center gap-1">
+                                                                <button onClick={(e) => {e.stopPropagation(); updateBlockStyle(block.id, {backgroundColor: block.style?.backgroundColor === 'bg-slate-900' ? 'bg-white' : 'bg-slate-900', textColor: block.style?.backgroundColor === 'bg-slate-900' ? 'text-slate-900' : 'text-white'})}} className="p-2 rounded-full hover:bg-white/20" title="Invert Colors"><Palette className="w-3.5 h-3.5" /></button>
+                                                                <button onClick={(e) => {e.stopPropagation(); removeBlock(block.id)}} className="p-2 rounded-full hover:bg-red-500 transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Block Content Renderers */}
+                                                    {block.type === 'hero' && (
+                                                        <div className="pointer-events-auto">
+                                                            <span className="inline-block px-3 py-1 bg-blue-100/50 text-blue-700 rounded-full text-[10px] font-bold uppercase tracking-wider mb-6 border border-blue-200">Event Registration</span>
+                                                            <InlineText tagName="h1" value={block.title || 'Event'} onChange={(v) => updateBlock(block.id, {title: v})} className="text-5xl md:text-8xl font-black mb-8 stack-sans-headline leading-[0.9] tracking-tight" />
+                                                            <InlineText tagName="p" value={block.content || 'Desc'} onChange={(v) => updateBlock(block.id, {content: v})} className="text-xl md:text-2xl opacity-70 google-sans-flex max-w-2xl leading-relaxed mb-10 mx-auto font-medium" />
+                                                        </div>
+                                                    )}
+                                                    {block.type === 'text' && (
+                                                        <div className="pointer-events-auto max-w-3xl mx-auto">
+                                                            <InlineText tagName="h2" value={block.title || 'Title'} onChange={(v) => updateBlock(block.id, {title: v})} className="text-3xl md:text-4xl font-bold mb-6 stack-sans-headline" />
+                                                            <InlineText tagName="p" value={block.content || 'Content'} onChange={(v) => updateBlock(block.id, {content: v})} className="text-lg opacity-80 leading-relaxed google-sans-flex" />
+                                                        </div>
+                                                    )}
+                                                    {block.type === 'features' && (
+                                                        <div className="pointer-events-auto">
+                                                            <InlineText tagName="h2" value={block.title || 'Features'} onChange={(v) => updateBlock(block.id, {title: v})} className="text-3xl md:text-4xl font-bold mb-12 stack-sans-headline" />
+                                                            <div className={`grid grid-cols-1 ${viewMode === 'mobile' ? 'gap-4' : 'md:grid-cols-3 gap-6'}`}>
+                                                                {(block.items || []).map((item, i) => (
+                                                                    <div key={i} className="bg-white p-8 rounded-2xl text-left shadow-sm border border-slate-100">
+                                                                        <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center mb-6 font-bold text-slate-400">{i+1}</div>
+                                                                        <InlineText tagName="h3" value={item.title} onChange={(v) => {
+                                                                            const newItems = [...(block.items || [])];
+                                                                            newItems[i].title = v;
+                                                                            updateBlock(block.id, {items: newItems});
+                                                                        }} className="font-bold mb-3 text-xl text-slate-900 stack-sans-headline" />
+                                                                        <InlineText tagName="p" value={item.desc} onChange={(v) => {
+                                                                            const newItems = [...(block.items || [])];
+                                                                            newItems[i].desc = v;
+                                                                            updateBlock(block.id, {items: newItems});
+                                                                        }} className="text-slate-500 text-sm leading-relaxed google-sans-flex" />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {block.type === 'speakers' && (
+                                                        <div className="pointer-events-auto">
+                                                            <InlineText tagName="h2" value={block.title || 'Speakers'} onChange={(v) => updateBlock(block.id, {title: v})} className="text-3xl md:text-4xl font-bold mb-12 stack-sans-headline" />
+                                                            <div className={`grid ${viewMode === 'mobile' ? 'grid-cols-2 gap-4' : 'grid-cols-4 gap-6'}`}>
+                                                                {[1, 2, 3, 4].map((i) => (
+                                                                    <div key={i}>
+                                                                        <div className="w-full aspect-square bg-white rounded-2xl mb-4 border border-slate-100"></div>
+                                                                        <h3 className="font-bold">Speaker {i}</h3>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <div className="flex items-center gap-1">
-                                                    <button onClick={(e) => {e.stopPropagation(); updateBlockStyle(block.id, {backgroundColor: block.style?.backgroundColor === 'bg-slate-900' ? 'bg-white' : 'bg-slate-900', textColor: block.style?.backgroundColor === 'bg-slate-900' ? 'text-slate-900' : 'text-white'})}} className="p-1.5 rounded hover:bg-white/20" title="Invert Colors"><Palette className="w-3.5 h-3.5" /></button>
-                                                    <button onClick={(e) => {e.stopPropagation(); removeBlock(block.id)}} className="p-1.5 rounded hover:bg-red-500 transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
-                                                </div>
-                                            </div>
+                                            </React.Fragment>
+                                        ))}
+
+                                        {/* Drop Zone at bottom if dragging */}
+                                        {isDraggingBlock && (
+                                             <div 
+                                                onDragOver={(e) => e.preventDefault()}
+                                                onDrop={(e) => handleDrop(e, blocks.length)}
+                                                className="h-24 m-4 border-2 border-dashed border-blue-300 bg-blue-50/50 rounded-xl flex items-center justify-center text-blue-400 font-bold"
+                                             >
+                                                Drop to add at bottom
+                                             </div>
                                         )}
 
-                                        {block.type === 'hero' && (
-                                            <div className="pointer-events-auto">
-                                                <span className="inline-block px-3 py-1 bg-blue-100/50 text-blue-700 rounded-full text-[10px] font-bold uppercase tracking-wider mb-6 border border-blue-200">Event Registration</span>
-                                                <InlineText tagName="h1" value={block.title || 'Event'} onChange={(v) => updateBlock(block.id, {title: v})} className="text-5xl md:text-8xl font-black mb-8 stack-sans-headline leading-[0.9] tracking-tight" />
-                                                <InlineText tagName="p" value={block.content || 'Desc'} onChange={(v) => updateBlock(block.id, {content: v})} className="text-xl md:text-2xl opacity-70 google-sans-flex max-w-2xl leading-relaxed mb-10 mx-auto font-medium" />
-                                            </div>
-                                        )}
-                                        {block.type === 'text' && (
-                                            <div className="pointer-events-auto max-w-3xl mx-auto">
-                                                <InlineText tagName="h2" value={block.title || 'Title'} onChange={(v) => updateBlock(block.id, {title: v})} className="text-3xl md:text-4xl font-bold mb-6 stack-sans-headline" />
-                                                <InlineText tagName="p" value={block.content || 'Content'} onChange={(v) => updateBlock(block.id, {content: v})} className="text-lg opacity-80 leading-relaxed google-sans-flex" />
-                                            </div>
-                                        )}
-                                        {block.type === 'features' && (
-                                            <div className="pointer-events-auto">
-                                                <InlineText tagName="h2" value={block.title || 'Features'} onChange={(v) => updateBlock(block.id, {title: v})} className="text-3xl md:text-4xl font-bold mb-12 stack-sans-headline" />
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                    {(block.items || []).map((item, i) => (
-                                                        <div key={i} className="bg-white p-8 rounded-2xl text-left shadow-sm border border-slate-100">
-                                                            <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center mb-6 font-bold text-slate-400">{i+1}</div>
-                                                            <InlineText tagName="h3" value={item.title} onChange={(v) => {
-                                                                const newItems = [...(block.items || [])];
-                                                                newItems[i].title = v;
-                                                                updateBlock(block.id, {items: newItems});
-                                                            }} className="font-bold mb-3 text-xl text-slate-900 stack-sans-headline" />
-                                                            <InlineText tagName="p" value={item.desc} onChange={(v) => {
-                                                                const newItems = [...(block.items || [])];
-                                                                newItems[i].desc = v;
-                                                                updateBlock(block.id, {items: newItems});
-                                                            }} className="text-slate-500 text-sm leading-relaxed google-sans-flex" />
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                        {block.type === 'speakers' && (
-                                            <div className="pointer-events-auto">
-                                                <InlineText tagName="h2" value={block.title || 'Speakers'} onChange={(v) => updateBlock(block.id, {title: v})} className="text-3xl md:text-4xl font-bold mb-12 stack-sans-headline" />
-                                                <div className="grid grid-cols-4 gap-6">
-                                                    {[1, 2, 3, 4].map((i) => (
-                                                        <div key={i}>
-                                                            <div className="w-full aspect-square bg-white rounded-2xl mb-4 border border-slate-100"></div>
-                                                            <h3 className="font-bold">Speaker {i}</h3>
-                                                        </div>
-                                                    ))}
+                                        {/* Mobile View: Render Form at Bottom */}
+                                        {viewMode === 'mobile' && (
+                                            <div className="p-4 bg-slate-100 mt-8 border-t border-slate-200">
+                                                <div 
+                                                    className="bg-white p-6 transition-all duration-300 pointer-events-none opacity-80"
+                                                    style={{ 
+                                                        borderRadius: '1rem', // Simple rounded for mobile simulation
+                                                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                                                    }}
+                                                >
+                                                    <div className="text-center">
+                                                        <p className="text-xs font-bold text-slate-400 uppercase mb-2">Registration Form</p>
+                                                        <div className="h-2 w-1/3 bg-slate-100 mx-auto rounded-full mb-4"></div>
+                                                        <div className="h-8 w-full bg-slate-100 rounded-lg"></div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         )}
                                     </div>
-                                ))}
+                                )}
                             </div>
-                        )}
-                    </div>
 
-                    {/* 30% Form Container (Static Floating Card Preview) */}
-                    <div className="flex-[3] h-full flex flex-col justify-center px-8 bg-slate-50 border-l border-slate-50/0 pointer-events-none">
-                        <div className="bg-white rounded-2xl shadow-2xl shadow-slate-200/50 border border-slate-100 p-8 max-h-[85vh] overflow-y-auto no-scrollbar flex flex-col pointer-events-auto opacity-90 hover:opacity-100 transition-opacity">
-                            {/* Fake Form Content */}
-                            <div className="mb-8">
-                                <div className="flex justify-between items-end mb-3">
-                                    <span className="text-slate-400 font-bold uppercase tracking-wide text-[10px]">Step 1 of 3</span>
+                            {/* 30% Form Container (Static Floating Card Preview) - ONLY IN DESKTOP */}
+                            {viewMode === 'desktop' && (
+                                <div className="flex-[3] h-full flex flex-col justify-center px-8 bg-slate-50 border-l border-slate-50/0 pointer-events-none">
+                                    <div 
+                                        onClick={() => { setSelectedFormCard(true); setSelectedBlockId(null); }}
+                                        className={`bg-white p-8 max-h-[85vh] overflow-y-auto no-scrollbar flex flex-col pointer-events-auto transition-all duration-300 cursor-pointer relative group
+                                            ${selectedFormCard ? 'ring-2 ring-blue-500' : 'hover:ring-2 hover:ring-blue-200'}
+                                        `}
+                                        style={{ 
+                                            boxShadow: formStyle.shadow === 'none' ? 'none' : `var(--tw-shadow-${formStyle.shadow || 'xl'})`,
+                                            borderRadius: formStyle.borderRadius === 'none' ? '0px' : formStyle.borderRadius === 'sm' ? '0.125rem' : formStyle.borderRadius === 'md' ? '0.375rem' : formStyle.borderRadius === 'lg' ? '0.5rem' : formStyle.borderRadius === 'xl' ? '0.75rem' : formStyle.borderRadius === '2xl' ? '1rem' : '1.5rem',
+                                            borderColor: formStyle.borderColor,
+                                            borderWidth: '1px',
+                                            backgroundColor: formStyle.backgroundColor
+                                        }}
+                                    >
+                                        {selectedFormCard && (
+                                            <div className="absolute top-2 right-2 bg-blue-50 text-blue-600 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide flex items-center gap-1">
+                                                <Settings className="w-3 h-3" /> Editing Style
+                                            </div>
+                                        )}
+
+                                        {/* Fake Form Content */}
+                                        <div className="mb-8">
+                                            <div className="flex justify-between items-end mb-3">
+                                                <span className="text-slate-400 font-bold uppercase tracking-wide text-[10px]">Step 1 of 3</span>
+                                            </div>
+                                            <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+                                                <div className="h-full bg-slate-900 w-1/3"></div>
+                                            </div>
+                                        </div>
+                                        <div className="mb-8 flex-1">
+                                            <h2 className="text-2xl font-bold text-slate-900 leading-tight stack-sans-headline mb-6">
+                                                {form.fields[0]?.label || 'Question'} <span className="text-blue-600">*</span>
+                                            </h2>
+                                            <div className="w-full text-xl text-slate-900 border-b border-slate-200 py-2 bg-transparent font-bold stack-sans-headline">
+                                                {form.fields[0]?.placeholder || 'Answer...'}
+                                            </div>
+                                        </div>
+                                        <button className="w-full bg-slate-900 text-white text-sm font-bold py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 shadow-lg">
+                                            Next <ArrowRight className="w-4 h-4" />
+                                        </button>
+                                        <div className="mt-6 text-center">
+                                            <p className="text-[10px] text-slate-300 font-bold uppercase tracking-wide">Secure via WrappedForm</p>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="h-full bg-slate-900 w-1/3"></div>
-                                </div>
-                            </div>
-                            <div className="mb-8 flex-1">
-                                <h2 className="text-2xl font-bold text-slate-900 leading-tight stack-sans-headline mb-6">
-                                    {form.fields[0]?.label || 'Question'} <span className="text-blue-600">*</span>
-                                </h2>
-                                <div className="w-full text-xl text-slate-900 border-b border-slate-200 py-2 bg-transparent font-bold stack-sans-headline">
-                                    {form.fields[0]?.placeholder || 'Answer...'}
-                                </div>
-                            </div>
-                            <button className="w-full bg-slate-900 text-white text-sm font-bold py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 shadow-lg">
-                                Next <ArrowRight className="w-4 h-4" />
-                            </button>
-                            <div className="mt-6 text-center">
-                                <p className="text-[10px] text-slate-300 font-bold uppercase tracking-wide">Secure via WrappedForm</p>
-                            </div>
+                            )}
                         </div>
                     </div>
                 </div>

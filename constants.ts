@@ -31,7 +31,13 @@ export const DEFAULT_LANDING_CONFIG: LandingConfig = {
           padding: 'md'
       }
     }
-  ]
+  ],
+  formStyle: {
+      shadow: '2xl',
+      borderRadius: '2xl',
+      borderColor: '#E2E8F0',
+      backgroundColor: '#ffffff'
+  }
 };
 
 export const DEFAULT_STORY_CONFIG: StoryConfig = {
