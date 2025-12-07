@@ -1,0 +1,5 @@
+{
+  "name": "WrappedForm",
+  "description": "A form builder platform that generates viral, Spotify Wrapped-style stories for event participants.",
+  "requestFramePermissions": []
+}

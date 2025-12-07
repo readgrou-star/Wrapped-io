@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WrappedForm</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Delius+Swash+Caps&family=Faculty+Glyphic&family=Google+Sans+Flex:opsz,wght@6..144,1..1000&family=Sour+Gummy:ital,wght@0,100..900;1,100..900&family=Stack+Sans+Headline:wght@200..700&family=Stack+Sans+Text:wght@200..700&display=swap" rel="stylesheet">
+    <style>
+      /* Base Resets */
+      body {
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+        background-color: #FFFFFF; /* Pure White for Minimalist */
+        color: #0F172A; /* Slate-900 */
+        font-family: "Google Sans Flex", sans-serif;
+      }
+      
+      /* Hide scrollbar for clean UI */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+
+      /* 
+       * USER REQUESTED FONTS 
+       */
+
+      .stack-sans-headline {
+        font-family: "Stack Sans Headline", sans-serif;
+        font-weight: 700;
+        font-style: normal;
+      }
+
+      .google-sans-flex {
+        font-family: "Google Sans Flex", sans-serif;
+        font-optical-sizing: auto;
+        font-weight: 400;
+        font-style: normal;
+        font-variation-settings:
+          "slnt" 0,
+          "wdth" 100,
+          "GRAD" 0,
+          "ROND" 0;
+      }
+
+      /* Minimalist Design Utilities */
+      
+      .btn-primary {
+        background-color: #0F172A; /* Slate-900 */
+        color: white;
+        border: 1px solid #0F172A;
+        border-radius: 0.5rem; /* rounded-lg */
+        transition: all 0.2s ease;
+      }
+      .btn-primary:hover {
+        background-color: #334155;
+        border-color: #334155;
+        transform: translateY(-1px);
+      }
+
+      .card-solid {
+        background-color: #FFFFFF;
+        border: 1px solid #E2E8F0; /* Slate-200 */
+        border-radius: 0.75rem; /* rounded-xl (reduced from 3xl) */
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      }
+      
+      .input-minimal {
+        border-radius: 0.5rem; /* rounded-lg */
+        border: 1px solid #E2E8F0;
+        transition: border-color 0.2s;
+      }
+      .input-minimal:focus {
+        border-color: #0F172A;
+        outline: none;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.10.1",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.7"
+  }
+}
+</script>
+</head>
+  <body class="google-sans-flex">
+    <div id="root"></div>
+  </body>
+</html>
