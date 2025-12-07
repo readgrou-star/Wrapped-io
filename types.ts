@@ -11,16 +11,37 @@ export interface FormField {
   options?: string[]; // For select/dropdown inputs
 }
 
-export type StoryTemplate = 'gradient' | 'minimal' | 'bold' | 'neon';
+// --- STORY CANVAS TYPES ---
+
+export type StoryElementType = 'text' | 'image' | 'shape';
+
+export interface StoryElementStyle {
+    color?: string;
+    backgroundColor?: string;
+    fontSize?: number;
+    fontWeight?: string;
+    fontFamily?: string;
+    borderRadius?: number;
+    zIndex?: number;
+    textAlign?: 'left' | 'center' | 'right';
+    opacity?: number;
+}
+
+export interface StoryElement {
+  id: string;
+  type: StoryElementType;
+  content?: string; // Text content or Image URL
+  x: number; // Percentage 0-100
+  y: number; // Percentage 0-100
+  width?: number; // Percentage
+  height?: number; // Percentage
+  style: StoryElementStyle;
+  isDynamic?: boolean; // If true, content is a variable key (e.g. 'name')
+}
 
 export interface StoryConfig {
-  template: StoryTemplate;
-  accentColor: string;
-  primaryText: string;
-  secondaryText: string;
-  showDate: boolean;
-  showParticipantName: boolean;
-  backgroundImage?: string;
+  backgroundColor: string; // Hex or Gradient
+  elements: StoryElement[];
 }
 
 // --- LANDING PAGE TYPES ---
@@ -56,7 +77,7 @@ export interface Form {
   status: 'draft' | 'active' | 'closed';
   fields: FormField[];
   storyConfig: StoryConfig;
-  landingConfig: LandingConfig; // New field
+  landingConfig: LandingConfig; 
   stats: {
     views: number;
     submissions: number;

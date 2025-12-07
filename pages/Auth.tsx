@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Sparkles, ArrowRight, AlertCircle } from 'lucide-react';
+import { Sparkles, ArrowRight, AlertCircle, Zap } from 'lucide-react';
 
 export const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -39,6 +40,12 @@ export const AuthPage = () => {
     }
   };
 
+  const handleDemoLogin = async () => {
+      setIsLoading(true);
+      await signIn('demo@wrappedform.co', 'demo');
+      navigate('/dashboard');
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
       <div className="max-w-md w-full card-solid overflow-hidden shadow-sm">
@@ -52,10 +59,25 @@ export const AuthPage = () => {
 
         <div className="p-8 bg-white">
             {useMockMode && (
-                <div className="mb-6 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-                    <div className="text-xs text-yellow-800 font-medium">
-                        <strong>Demo Mode:</strong> Login with any email. No password check.
+                <div className="mb-6 space-y-3">
+                     <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                        <div className="text-xs text-yellow-800 font-medium">
+                            <strong>Demo Mode:</strong> Login with any email. No password check.
+                        </div>
+                    </div>
+                    <button 
+                        type="button"
+                        onClick={handleDemoLogin}
+                        className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-lg transition flex items-center justify-center gap-2 text-xs border border-slate-200"
+                    >
+                        <Zap className="w-3.5 h-3.5 text-yellow-600 fill-yellow-600" />
+                        Quick Demo Login
+                    </button>
+                    <div className="flex items-center gap-3">
+                        <div className="h-px bg-slate-100 flex-1"></div>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">OR</span>
+                        <div className="h-px bg-slate-100 flex-1"></div>
                     </div>
                 </div>
             )}
